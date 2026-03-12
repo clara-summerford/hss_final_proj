@@ -166,21 +166,21 @@ def extract_windows():
     pts = plt.ginput(n=20, timeout=-1) # need 2*10 points, -1 never times out
     plt.close()
 
-    trials_path = Path("final_proj/trials")
-    for i in range(10):
-        start_in = int(pts[i*2][0]) # rounding to integer of nearest index
-        end_in = int(pts[(i*2)+1][0])
+    # trials_path = Path("final_proj/trials")
+    # for i in range(10):
+    #     start_in = int(pts[i*2][0]) # rounding to integer of nearest index
+    #     end_in = int(pts[(i*2)+1][0])
 
-        segment = imu.iloc[start_in:end_in].reset_index(drop=True)
+    #     segment = imu.iloc[start_in:end_in].reset_index(drop=True)
 
-        user_folder = f"P{user}"
-        seg_folder = f"A{sport}"
-        seg_path = trials_path/user_folder/seg_folder
-        seg_name = f"{user}_{sport}_{i+1:02d}.csv"
+    #     user_folder = f"P{user}"
+    #     seg_folder = f"A{sport}"
+    #     seg_path = trials_path/user_folder/seg_folder
+    #     seg_name = f"{user}_{sport}_{i+1:02d}.csv"
 
-        # save activity segments as individual files, easier to parse through later
-        segment.to_csv(seg_path/seg_name, index=False)
-        print(f"Saved {len(segment)} rows → {seg_path/seg_name}")
+    #     # save activity segments as individual files, easier to parse through later
+    #     segment.to_csv(seg_path/seg_name, index=False)
+    #     print(f"Saved {len(segment)} rows → {seg_path/seg_name}")
 
 extract_windows()
 
