@@ -10,7 +10,7 @@ from sklearn import svm
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay
 
-trials_path = Path("final_proj/trials")
+trials_path = Path("hss_final_proj/trials")
 
 # create feature vector and labels by iterating through each activity iteration
 X_vec = []
@@ -72,7 +72,6 @@ for participant_path in sorted(trials_path.iterdir()): # iterate through all fol
             participants.append(p.split('_')[0])
             X_vec.append(features)
 
-print(len(y_vec))
 
 X_vec = pd.DataFrame(X_vec)
 # y_vec = pd.Series(y_vec)
@@ -93,7 +92,7 @@ clf = svm.SVC()
 # --- LOPO model evaluation ---
 LOPO_score = []
 logo = LeaveOneGroupOut()
-activity_list = ["Frisbee", "Pickleball", "Baseball"]
+activity_list = ["Frisbee", "Pickleball", "Baseball", "Rugby", "Lacrosse", "Tennis"]
 
 for train_index, test_index in logo.split(X_vec, y_vec, groups=participants):
     X_train, X_test = X_vec[train_index], X_vec[test_index]
@@ -106,15 +105,15 @@ for train_index, test_index in logo.split(X_vec, y_vec, groups=participants):
     print(f'Score for individual LOPO iteration: {score}')
 
     # create a confusion matrix for each participant to identify discrepancies
-    # y_pred = clf.predict(X_test)
-    # ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
-    # plt.title("LOPO Confusion Matrix")
-    # plt.show()
+    y_pred = clf.predict(X_test)
+    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
+    plt.title("LOPO Confusion Matrix")
+    plt.show()
     
 print(f'Average LOPO score: {np.mean(LOPO_score)}')
 
 # --- k-fold evaluation ---
-k = 3 # 10-fold validation for both cases
+k = 4
 kf = KFold(n_splits = k, shuffle=True)
 
 kf_score = []

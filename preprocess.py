@@ -4,15 +4,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import pandas as pd
-import os
+
+# adjust root path as needed 
+root = Path('hss_final_proj/3_25_raw_data')
 
 # combine accelerometer and gyroscope data into one IMU file
-
-root = Path('final_proj/raw_data')
-
 def merge_acc_gryo():
     for trial_path in sorted(root.iterdir()):
         if not trial_path.is_dir(): # can change this to leave out previously processed trials later
+            continue
+        elif trial_path == 'combined_IMU': # doesn't work?
             continue
 
         gyro = pd.read_csv(trial_path / 'Gyroscope.csv').sort_values('time').reset_index(drop=True)
@@ -48,20 +49,24 @@ def merge_acc_gryo():
 # combine all 3 IMU streams
 def combine_IMU_streams():
     # for number participants
-    for i in range(1,3): 
+    for i in range(1,4): 
 
         # for number activities
-        for j in range(1,4): 
+        for j in range(1,7): 
 
+            dfs = []
             # for number IMU streams (this range never changes, will always be 3)
-            # filenames = [str(i) + "_" + str(j) + "_" + str(k) + "_IMU.csv" for k in range(1,4)] 
             filenames = [f"{i}_{j}_{k}_IMU.csv" for k in range(1, 4)]
+            
+            for f in filenames:
+                filepath = root / f
+                if not filepath.is_file(): # keep loop structure but skip missing file if trial numbers aren't consistent
+                    continue
+                else:
+                    dfs.append(pd.read_csv(filepath).sort_values('time').reset_index(drop=True))
 
-            # df1 = pd.read_csv(root/filenames[0]).sort_values('time').reset_index(drop=True)
-            # df2 = pd.read_csv(root/filenames[1]).sort_values('time').reset_index(drop=True)
-            # df3 = pd.read_csv(root/filenames[2]).sort_values('time').reset_index(drop=True)
-            # dfs = [df1, df2, df3]
-            dfs = [pd.read_csv(root / f).sort_values('time').reset_index(drop=True) for f in filenames]
+            if not dfs:
+                continue # keep going though iterations if filenames are still invalid
 
             # trimming start/end values that are not included in all IMU streams
             latest_start = max(df['time'].iloc[0] for df in dfs)
@@ -71,8 +76,10 @@ def combine_IMU_streams():
             for df in dfs: # creates a nested list with 3 entries, each entry is a trimmed DF
                 mask = (df['time'] >= latest_start) & (df['time'] <= earliest_end)
                 trimmed.append(df[mask].sort_values('time').reset_index(drop=True))
-                # print(len(trimmed[0]))
-                # print(len(trimmed[1]))
+            # print("Trimmed dataframe lengths:")
+            # print(len(trimmed[0]))
+            # print(len(trimmed[1]))
+            # print(len(trimmed[2]))
 
 
             # store timestamp of the shortest of the trimmed dataframes
@@ -132,14 +139,17 @@ def combine_IMU_streams():
             combined.to_csv(output_path/output_file, index=False)
             print(f"Saved {len(combined)} rows → {output_path/output_file}")
 
+        if not dfs:
+            continue # keep going though iterations if filenames are still invalid
+
 # combine_IMU_streams()
 
 
 # analyze data by activity and user 
 def extract_windows():
 
-    user = int(input("Enter user number: \nVictoria = 1 \nClara = 2\n").strip())
-    sport = int(input("Enter sport: \nFrisbee = 1 \nPickle = 2\nThrowing = 3\n").strip())
+    user = int(input("Enter user number: \nVictoria = 1 \nClara = 2 \nJessi = 3\n").strip())
+    sport = int(input("Enter sport: \nFrisbee = 1 \nPickle = 2 \nThrowing = 3 \nRugby = 4 \nLacrosse = 5 \nTennis = 6\n").strip())
     # user = 1
     # sport = 3
 
@@ -166,21 +176,21 @@ def extract_windows():
     pts = plt.ginput(n=20, timeout=-1) # need 2*10 points, -1 never times out
     plt.close()
 
-    # trials_path = Path("final_proj/trials")
-    # for i in range(10):
-    #     start_in = int(pts[i*2][0]) # rounding to integer of nearest index
-    #     end_in = int(pts[(i*2)+1][0])
+    trials_path = Path("final_proj/trials")
+    for i in range(10):
+        start_in = int(pts[i*2][0]) # rounding to integer of nearest index
+        end_in = int(pts[(i*2)+1][0])
 
-    #     segment = imu.iloc[start_in:end_in].reset_index(drop=True)
+        segment = imu.iloc[start_in:end_in].reset_index(drop=True)
 
-    #     user_folder = f"P{user}"
-    #     seg_folder = f"A{sport}"
-    #     seg_path = trials_path/user_folder/seg_folder
-    #     seg_name = f"{user}_{sport}_{i+1:02d}.csv"
+        user_folder = f"P{user}"
+        seg_folder = f"A{sport}"
+        seg_path = trials_path/user_folder/seg_folder
+        seg_name = f"{user}_{sport}_{i+1:02d}.csv"
 
-    #     # save activity segments as individual files, easier to parse through later
-    #     segment.to_csv(seg_path/seg_name, index=False)
-    #     print(f"Saved {len(segment)} rows → {seg_path/seg_name}")
+        # save activity segments as individual files, easier to parse through later
+        segment.to_csv(seg_path/seg_name, index=False)
+        print(f"Saved {len(segment)} rows → {seg_path/seg_name}")
 
 extract_windows()
 
