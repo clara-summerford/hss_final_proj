@@ -1,3 +1,0 @@
-"Model, Score LOPO 1",Score LOPO 2,Score LOPO 3,Average LOPO Score,K-Fold Score 1,K-Fold Score 2,K-Fold Score 3,K-Fold Score 4,Average K-Fold Score,Average K-Fold Score Participant 1,Average K-Fold Score Participant 2,Average K-Fold Score Participant 3,Model,Score LOPO 1
-,0.6833333333333333,0.5,0.6128352490421456,1.0,1.0,1.0,1.0,1.0,0.9666666666666667,1.0,1.0,SVM,0.6551724137931034
-,0.6333333333333333,0.5333333333333333,0.6417624521072797,1.0,1.0,1.0,1.0,1.0,0.9833333333333334,1.0,1.0,Random Forest,0.7586206896551724

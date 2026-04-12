@@ -9,12 +9,13 @@ from sklearn.preprocessing import StandardScaler
 from sklearn import svm
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay
+import sklweka
 import sklweka.jvm as jvm
-from sklweka.dataset import to_nominal_labels
 from sklweka.classifiers import WekaEstimator
-from sklweka.preprocessing import WekaTransfomer
+from sklweka.dataset import to_nominal_labels
 from sklearn.model_selection import cross_val_score
-
+import logging
+from sklearn.feature_selection import SelectKBest, f_classif
 # make able to find folder path regardless of folder you are running from
 trials_path = Path("hss_final_proj/trials")
 BASE_DIR = Path(__file__).resolve().parent
@@ -109,9 +110,11 @@ for participant_path in sorted(trials_path.iterdir()): # iterate through all fol
 
 
 X_vec = pd.DataFrame(X_vec)
+X_vec = np.array(X_vec)
 # y_vec = pd.Series(y_vec)
 y_vec = np.array(y_vec)
 participants = np.array(participants)
+np.save('Participants.npy', participants)
 
 # uncomment below for troubleshooting/adding more features
 # print(X_vec.shape)
@@ -120,9 +123,17 @@ participants = np.array(participants)
 # scale data using Z-score normalization
 scaler = StandardScaler()
 X_vec = scaler.fit_transform(X_vec)
+np.save('y_vec.npy', y_vec)
+np.save('Normalized_X_vec.npy', X_vec)
+
+# Feature Optimization, take top 100 for now, play around with changing this
+# geeks for geeks does this after split so might need to change
+selector = SelectKBest(score_func=f_classif, k =100)
+X_vec = selector.fit_transform(X_vec, y_vec)
+
 
 # initialize a df to save all results in and export to spreadsheet
-all_scores = pd.DataFrame(columns=['Model, Score LOPO 1', 'Score LOPO 2', 'Score LOPO 3', 'Average LOPO Score', 'K-Fold Score 1', 'K-Fold Score 2', 'K-Fold Score 3', 'K-Fold Score 4', 'Average K-Fold Score', 'Average K-Fold Score Participant 1', 'Average K-Fold Score Participant 2', 'Average K-Fold Score Participant 3' ])
+all_scores = pd.DataFrame(columns=['Model', 'Score LOPO 1', 'Score LOPO 2', 'Score LOPO 3', 'Average LOPO Score', 'K-Fold Score 1', 'K-Fold Score 2', 'K-Fold Score 3', 'K-Fold Score 4', 'Average K-Fold Score', 'Average K-Fold Score Participant 1', 'Average K-Fold Score Participant 2', 'Average K-Fold Score Participant 3'])
 
 # ---  SVC classifier ---
 clf = svm.SVC()
@@ -246,7 +257,7 @@ for i, (train_index, test_index) in enumerate(kf.split(X_vec)):
 print(f'Average k-fold score: {np.mean(kf_score)}')
 all_scores.loc[1, f'Average K-Fold Score'] = np.mean(kf_score)
 
-# individual participant CV
+# Per-participant K-Fold CV
 kf = KFold(n_splits = 6, shuffle=True)
 for i, participant in enumerate(np.unique(participants)):
 
@@ -266,14 +277,7 @@ for i, participant in enumerate(np.unique(participants)):
     print(f'Average k-fold score for participant {participant}: {np.mean(kf_score)}')
     all_scores.loc[1, f'Average K-Fold Score Participant {i+1}'] = np.mean(kf_score)
 
-
-# -- Logistic Model Tree Model ---
-# using sklearn weka plugin
-jvm.start(packages=True)
-y = to_nominal_labels(y)
-
-
-# -- Long Short Term Memory Model ---
+# --- see other scripts for LMT & LSTM ---
 
 
 
