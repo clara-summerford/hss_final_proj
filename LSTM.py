@@ -1,17 +1,18 @@
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import KFold, LeaveOneGroupOut
-from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay
+#from sklearn.model_selection import KFold, LeaveOneGroupOut
+#from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Flatten, Masking
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import LabelBinarizer
-from sklearn.feature_selection import SelectPercentile
+# from sklearn.feature_selection import SelectPercentile
 import keras_tuner
+from keras.callbacks import EarlyStopping
 
 trials_path = Path("hss_final_proj/trials")
 BASE_DIR = Path(__file__).resolve().parent
@@ -58,7 +59,7 @@ for df in data:
     data_padded.append(padded_arr)
 X = np.stack(data_padded)
 
-X = np.array([df.values for df in data])
+#X = np.array([df.values for df in data])
 y = np.array(labels)
 lb = LabelBinarizer()
 y = lb.fit_transform(y)
@@ -72,34 +73,10 @@ X = X_2D_scaled.reshape(n_samp, n_time, n_stream)
 print(np.shape(X))
 
 
-# evalute model on data
-# start with K-Fold evaluation, HW 3 is helpful for copying necessary evaluation code
-# K-fold validation for the whole data set
-kf = KFold(4, shuffle=True, random_state=42)
-accuracy_list = []
-
-# # code from homework 3 for K-Fold validation on a nueral network
-# for fold, (train_index, val_index) in enumerate(kf.split(X)):# Create Model            
-#     model = Sequential()
-#     model.add(Masking(mask_value=0.0, input_shape=(n_time, n_stream))
-#     model.add(LSTM(100, return_sequences=True)
-#     model.add(LSTM(50))
-#     #model.add(Dropout(0.2))
-#     model.add(Dense(6, activation='softmax'))
-#     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-#     #print(model.summary())
-#     model.fit(X[train_index], y[train_index], epochs=100, batch_size=4, verbose=0)
-#     val_preds = np.argmax(model.predict(X[val_index]), axis=1)
-#     val_true = np.argmax(y[val_index], axis=1)
-#     accuracy = accuracy_score(val_true, val_preds)
-#     results = model.evaluate(X[val_index], y[val_index])
-#     print(results[1])
-#     accuracy_list.append(accuracy)
-#     print(accuracy)
-
-# try implementing Keras tuner to see if the model can perform better
+# implement Keras tuner to see if the model can perform better
 def build_model(hp):
     model = Sequential()
+    model.add(Masking(mask_value=0.0, input_shape=(n_time, n_stream)))
     #model.add(Flatten())
     # Tune number of layers
     for i in range(hp.Int("num_layers", 1, 5)):
@@ -127,36 +104,63 @@ def build_model(hp):
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         return model
 
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3, random_state = 42)
 
 tuner = keras_tuner.RandomSearch(
    build_model,
    objective='val_loss',
-   max_trials=100,
-   directory = "optimal_params", 
+   max_trials=150,
+   directory = "optimal_params_padded", 
    project_name = "LSTM_params")
 
 # for troubleshooting
 # tuner.search_space_sumamry()
 
 
-tuner.search(X_train, y_train, epochs=5, validation_data=(X_test, y_test))
+tuner.search(X_train, y_train, epochs=50, batch_size =16, validation_data=(X_test, y_test))
 best_model = tuner.get_best_models()[0]
 
-# Get the top 2 models.
+# Get the top models.
 models = tuner.get_best_models(num_models=2)
+tuner.results_summary()
 best_model = models[0]
 print('Best Model:')
 best_model.summary()
-tuner.results_summary()
+second_best = models[1]
+print('Second Best Model:')
+second_best.summary()
 
-# kind of confused about the 5 and 0 here
-best_hps = tuner.get_best_hyperparameters(5)
-model = build_model(best_hps[0])
-# then do K-Fold validation
+# seems like it will actually just be best to run everything above first and then manually 
+# change the hyperparameters and do the validation
+
+# evalute model on data
+# start with K-Fold evaluation, HW 3 is helpful for copying necessary evaluation code
+# # K-fold validation for the whole data set
+# kf = KFold(4, shuffle=True, random_state=42)
+# accuracy_list = []
+
+# early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+# # # code from homework 3 for K-Fold validation on a nueral network
+# for fold, (train_index, val_index) in enumerate(kf.split(X)):# Create Model            
+#     model = Sequential()
+#     #model.add(Masking(mask_value=0.0, input_shape=(n_time, n_stream)))
+#     model.add(LSTM(330, return_sequences=True, activation='relu', use_bias=True, dropout=0.20268, recurrent_dropout=0))
+#     model.add(LSTM(50))
+#     #model.add(Dropout(0.2))
+#     model.add(Dense(9, activation='softmax'))
+#     model.add(Dense(6, activation='softmax'))
+#     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+#     #print(model.summary())
+#     model.fit(X[train_index], y[train_index], epochs=50, batch_size=16, verbose=0, callbacks=[early_stopping])
+#     val_preds = np.argmax(model.predict(X[val_index]), axis=1)
+#     val_true = np.argmax(y[val_index], axis=1)
+#     accuracy = accuracy_score(val_true, val_preds)
+#     results = model.evaluate(X[val_index], y[val_index])
+#     accuracy_list.append(accuracy)
+#     print(accuracy)
 
 # average_accuracy = np.mean(accuracy_list)
 # print(f'\nAverage Accuracy Across Folds: {average_accuracy}')
 
-
-# LOPO evaluation on the model
