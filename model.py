@@ -1,6 +1,5 @@
 # processing all activities and feature extraction
-
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -9,8 +8,15 @@ from sklearn.preprocessing import StandardScaler
 from sklearn import svm
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay
+from sklearn.model_selection import cross_val_score
+from sklearn.feature_selection import SelectPercentile
+from sklearn.feature_selection import f_classif
+# import shap, needs older version of numpy, maybe not worth doing until the very end
 
+# make able to find folder path regardless of folder you are running from
 trials_path = Path("hss_final_proj/trials")
+BASE_DIR = Path(__file__).resolve().parent
+trials_path = BASE_DIR / "trials"
 
 # create feature vector and labels by iterating through each activity iteration
 X_vec = []
@@ -31,7 +37,8 @@ for participant_path in sorted(trials_path.iterdir()): # iterate through all fol
 
             df = pd.read_csv(imu_path)
 
-            # features: peak acceleration, peak angular velocity, axis energy ratios, signal energy (magnitude)
+            # Features added: variance (for each axis), zero crossing rate (for each axis), signal energy (each axis), total signal energy, mean
+            # Other maybes (frequency features): spectral entropy, HHT? , spectral centroid, MFCC
             features = {}
             
             imus = [1, 2, 3]
@@ -56,15 +63,41 @@ for participant_path in sorted(trials_path.iterdir()): # iterate through all fol
                     features[f"imu{imu}_{sensor}_mag_mean"] = mag.mean()
                     features[f"imu{imu}_{sensor}_mag_std"] = mag.std()
 
-                    # axis ratios
+                    # total energy
+                    features[f"imu{imu}_{sensor}_tot_sigen"] = mag.sum()
+
+                        
                     if sensor == "accel":
                         ax = df[f"imu{imu}_accel_x"]
                         ay = df[f"imu{imu}_accel_y"]
                         az = df[f"imu{imu}_accel_z"]
 
-                        features[f"imu{imu}_ay_az_ratio"] = ay.abs().mean() / (az.abs().mean() + 1e-6) # making sure you dom't divide by 0
+                        # axis ratios
+                        features[f"imu{imu}_ay_az_ratio"] = ay.abs().mean() / (az.abs().mean() + 1e-6) # making sure you don't divide by 0
                         features[f"imu{imu}_ax_az_ratio"] = ax.abs().mean() / (az.abs().mean() + 1e-6)
                         features[f"imu{imu}_ax_ay_ratio"] = ax.abs().mean() / (ay.abs().mean() + 1e-6)
+
+
+                    for axis in axes:
+                        col = [f"imu{imu}_{sensor}_{axis}"]
+                        data = df[col]
+
+                        # variance of each axis
+                        features[f"imu{imu}_{sensor}_{axis}_var"] = data.var().item()
+  
+                        # zero crossing rate of each axis
+                        signs = np.sign(data)
+                        crossings = signs.diff().fillna(0) != 0
+                        zcr = crossings.sum() / len(data)
+                        features[f"imu{imu}_{sensor}_{axis}_zcr"] = zcr.item()
+
+                        # per axis signal energy
+                        mag = np.sqrt((data**2))
+                        features[f"imu{imu}_{sensor}_{axis}_sigen"] = mag.sum().item()
+
+                        # mean of each axis
+                        features[f"imu{imu}_{sensor}_{axis}_mean"] = data.mean().item()
+
 
             # generating labels and appending all features
             p = imu_path.stem
@@ -78,23 +111,35 @@ X_vec = pd.DataFrame(X_vec)
 y_vec = np.array(y_vec)
 participants = np.array(participants)
 
-print(X_vec.shape)
-print(X_vec.columns)
+# uncomment below for troubleshooting/adding more features
+# print(X_vec.shape)
+# print(X_vec.columns)
 
 # scale data using Z-score normalization
 scaler = StandardScaler()
 X_vec = scaler.fit_transform(X_vec)
 
-# selecting classifiers
-# clf = RandomForestClassifier()
-clf = svm.SVC()
+# select only 50% most relevant features, with ANOVA F-value between label/feature
+X_vec = SelectPercentile(f_classif, percentile=50).fit_transform(X_vec, y_vec)
 
-# --- LOPO model evaluation ---
+# initialize a df to save all results in and export to spreadsheet
+all_scores = pd.DataFrame(columns=['Model, Score LOPO 1', 'Score LOPO 2', 'Score LOPO 3', 'Average LOPO Score', 'K-Fold Score 1', 'K-Fold Score 2', 'K-Fold Score 3', 'K-Fold Score 4', 'Average K-Fold Score', 'Average K-Fold Score Participant 1', 'Average K-Fold Score Participant 2', 'Average K-Fold Score Participant 3' ])
+
+# ---  SVC classifier ---
+clf = svm.SVC()
+# try implmenting shap coefficients on first on SVM
+#explainer = shap.LinearExplainer(clf)
+
+# LOPO model evaluation 
+print("Results for SVC classifier:")
+
+all_scores.loc[0, 'Model'] = 'SVM'
 LOPO_score = []
 logo = LeaveOneGroupOut()
-activity_list = ["Frisbee", "Pickleball", "Baseball", "Rugby", "Lacrosse", "Tennis"]
+activity_list = ["Frisbee", "Pickleball", "Baseball", "Rugby", "Lacrosse", "Tennis"] # for confusion matrix 
 
-for train_index, test_index in logo.split(X_vec, y_vec, groups=participants):
+#shap_values = []
+for i, (train_index, test_index) in enumerate(logo.split(X_vec, y_vec, groups=participants)):
     X_train, X_test = X_vec[train_index], X_vec[test_index]
     y_train, y_test = y_vec[train_index], y_vec[test_index]
 
@@ -102,22 +147,32 @@ for train_index, test_index in logo.split(X_vec, y_vec, groups=participants):
     score = clf.score(X_test, y_test)
     LOPO_score.append(score)
 
+    # try implmenting shap values, not entirely sure what this will yield but could
+    # be another interesting visual
+    # shap_vals = explainer(X_test)
+    # shap_values.append(shap_vals)
+    # shap.summary_plot(shap_vals, X_test)
+
     print(f'Score for individual LOPO iteration: {score}')
+    all_scores.loc[0, f'Score LOPO {i+1}'] = score
 
     # create a confusion matrix for each participant to identify discrepancies
-    y_pred = clf.predict(X_test)
-    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
-    plt.title("LOPO Confusion Matrix")
-    plt.show()
+    # y_pred = clf.predict(X_test)
+    # ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
+    # plt.title("LOPO Confusion Matrix")
+    # plt.show()
     
 print(f'Average LOPO score: {np.mean(LOPO_score)}')
+all_scores.loc[0, 'Average LOPO Score'] = np.mean(LOPO_score)
+#print('Shap Values:')
+#print(shap_values)
 
-# --- k-fold evaluation ---
+# k-fold evaluation 
 k = 4
 kf = KFold(n_splits = k, shuffle=True)
 
 kf_score = []
-for train_index, test_index in kf.split(X_vec):
+for i, (train_index, test_index) in enumerate(kf.split(X_vec)):
     X_train, X_test = X_vec[train_index], X_vec[test_index]
     y_train, y_test = y_vec[train_index], y_vec[test_index]
 
@@ -127,15 +182,17 @@ for train_index, test_index in kf.split(X_vec):
 
     print(f'Iteration k-fold score: {score}')
     y_pred = clf.predict(X_test)
-    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
-    plt.title("K-fold Confusion Matrix")
-    plt.show()
+    all_scores.loc[0, f'K-Fold Score {i+1}'] = score
+    # ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
+    # plt.title("K-fold Confusion Matrix")
+    # plt.show()
 
 print(f'Average k-fold score: {np.mean(kf_score)}')
+all_scores.loc[0, f'Average K-Fold Score'] = np.mean(kf_score)
 
-# --- k-fold evaluation for each participant ---
+# k-fold evaluation for each participant
 kf = KFold(n_splits = 6, shuffle=True)
-for participant in np.unique(participants):
+for i, participant in enumerate(np.unique(participants)):
 
     index = np.where(participants == participant)
     X_group = X_vec[index]
@@ -151,8 +208,77 @@ for participant in np.unique(participants):
         kf_score.append(score)
 
     print(f'Average k-fold score for participant {participant}: {np.mean(kf_score)}')
+    all_scores.loc[0, f'Average K-Fold Score Participant {i+1}'] = np.mean(kf_score)
+
+# print(all_scores)
 
 
+# --- Random Forest Classifer ---
+clf = RandomForestClassifier()
+print("Results for random forest classifier:")
+all_scores.loc[1, 'Model'] = 'Random Forest'
 
+# LOPO CV
+LOPO_score = []
+logo = LeaveOneGroupOut()
+activity_list = ["Frisbee", "Pickleball", "Baseball", "Rugby", "Lacrosse", "Tennis"]
+
+for i, (train_index, test_index) in enumerate(logo.split(X_vec, y_vec, groups=participants)):
+    X_train, X_test = X_vec[train_index], X_vec[test_index]
+    y_train, y_test = y_vec[train_index], y_vec[test_index]
+
+    clf.fit(X_train, y_train)
+    score = clf.score(X_test, y_test)
+    LOPO_score.append(score)
+
+    print(f'Score for individual LOPO iteration: {score}')
+    all_scores.loc[1, f'Score LOPO {i+1}'] = score
+
+print(f'Average LOPO score: {np.mean(LOPO_score)}')
+all_scores.loc[1, 'Average LOPO Score'] = np.mean(LOPO_score)
+
+# K-Fold CV
+k = 4
+kf = KFold(n_splits = k, shuffle=True)
+
+kf_score = []
+for i, (train_index, test_index) in enumerate(kf.split(X_vec)):
+    X_train, X_test = X_vec[train_index], X_vec[test_index]
+    y_train, y_test = y_vec[train_index], y_vec[test_index]
+
+    clf.fit(X_train, y_train)
+    score = clf.score(X_test, y_test)
+    kf_score.append(score)
+
+    print(f'Iteration k-fold score: {score}')
+    y_pred = clf.predict(X_test)
+    all_scores.loc[1, f'K-Fold Score {i+1}'] = score
+
+print(f'Average k-fold score: {np.mean(kf_score)}')
+all_scores.loc[1, f'Average K-Fold Score'] = np.mean(kf_score)
+
+# individual participant CV
+kf = KFold(n_splits = 6, shuffle=True)
+for i, participant in enumerate(np.unique(participants)):
+
+    index = np.where(participants == participant)
+    X_group = X_vec[index]
+    y_group = y_vec[index]
+    kf_score = []
+
+    for train_index, test_index in kf.split(X_group):
+        X_train, X_test = X_group[train_index], X_group[test_index]
+        y_train, y_test = y_group[train_index], y_group[test_index]
+
+        clf.fit(X_train, y_train)
+        score = clf.score(X_test, y_test)
+        kf_score.append(score)
+
+    print(f'Average k-fold score for participant {participant}: {np.mean(kf_score)}')
+    all_scores.loc[1, f'Average K-Fold Score Participant {i+1}'] = np.mean(kf_score)
+
+# export score data frame to excel/csv, important for when we eventually want to compare many different models
+all_scores.to_csv("Model Scores.csv", index=False)
+# all_scores.to_excel("ModelScore.xlsx", index=False)
             
 

@@ -2,7 +2,7 @@
 
 ## Preprocessing
 - All raw data processing is done in **preprocess.py**
-- As of this commit (3/27), this script does not do any signal processing or filtering. This script just formats the data and extracts individual activities.
+- As of this commit (4/6), this script does not do any signal processing or filtering. This script just formats the data and extracts individual activities.
 - Each activity trial is in the "trials" with the format **subject_activity_trial** where each CSV contains the combined accelerometer and gyroscope data across all 3 IMUs.
 
 ## Secondary processing
@@ -10,8 +10,8 @@
 - For cases where the UNIX time was offset significantly (the date was incorrect and offset by a week for one trial) the **time_adjust.py** script uses user input to visually line up readings to correct this major offset. 
 
 ## Model training
-- As of this commit (3/27), **model.py** builds and trains an SVM model that is analyzed using LOPO, k-fold validation across all trials, and k-fold validations specific to each user. 
-- This is a simple proof-of-concept model with limited success.
+- As of this commit (4/6, **model.py** builds and trains an SVM model and a RF model which are analyzed using LOPO, k-fold validation across all trials, and k-fold validations specific to each user. 
+- The accuracy of each cross validation is saved to a CSV file where each model is one row of the CSV. This will be important for evaluating many models or different parameters down the line.
 
 ## Visualization
 - To create data visuals for report and presentations, the **visualization.py** script generates IMU plots of individual trials. Alternatively, raw data could also be plotted if needed. 
