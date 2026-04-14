@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -9,6 +10,7 @@ from sklearn.preprocessing import LabelBinarizer
 from keras.callbacks import EarlyStopping
 import keras_tuner
 from keras.callbacks import EarlyStopping
+from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay
 
 # -- Try a different 2D CNN Model (time versus 6 sensor columns), use football paper as inspiration ---
 trials_path = Path("hss_final_proj/trials")
@@ -62,7 +64,7 @@ y = np.array(labels)
 lb = LabelBinarizer()
 y = lb.fit_transform(y)
 
-# Normalize, it seems most common to use this normalization for LSTM model
+# Normalize, it seems most common to use this normalization for NN model
 n_samp, n_time, n_stream = X.shape
 scalar = MinMaxScaler()
 X_2D = X.reshape(-1, n_stream)
@@ -104,80 +106,105 @@ def build_model(hp):
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
+# comment out below just for final eval
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3, random_state = 42)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3, random_state = 42)
+# tuner = keras_tuner.RandomSearch(
+#    build_model,
+#    objective='val_loss',
+#    max_trials=150,
+#    directory = "optimal_params_CNN", 
+#    project_name = "CNN_params")
 
-tuner = keras_tuner.RandomSearch(
-   build_model,
-   objective='val_loss',
-   max_trials=150,
-   directory = "optimal_params_CNN", 
-   project_name = "CNN_params")
+# # for troubleshooting
+# # tuner.search_space_sumamry()
 
-# for troubleshooting
-# tuner.search_space_sumamry()
+# tuner.search(X_train, y_train, epochs=50, validation_data=(X_test, y_test))
+# best_model = tuner.get_best_models()[0]
 
-tuner.search(X_train, y_train, epochs=50, validation_data=(X_test, y_test))
-best_model = tuner.get_best_models()[0]
-
-# Get the top 2 models.
-models = tuner.get_best_models(num_models=2)
-best_model = models[0]
-print('Best Model:')
-best_model.summary()
-tuner.results_summary()
-second_best = models[1]
-print('Second Best Model:')
-second_best.summary()
-
-# # kind of confused about the 5 and 0 here
-# best_hps = tuner.get_best_hyperparameters(5)
-# model = build_model(best_hps[0])
+# # Get the top 2 models.
+# models = tuner.get_best_models(num_models=2)
+# best_model = models[0]
+# print('Best Model:')
+# best_model.summary()
+# tuner.results_summary()
+# second_best = models[1]
+# print('Second Best Model:')
+# second_best.summary()
 
 # evalute model on data
 # start with K-Fold evaluation
 # K-fold validation for the whole data set
-# kf = KFold(4, shuffle=True, random_state=42)
-# accuracy_list = []
+kf = KFold(4, shuffle=True, random_state=42)
+accuracy_list = []
 
-# early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
+def optimal_model():
+    model = Sequential()
+    model.add(Masking(mask_value=0.0, input_shape=(n_time, n_stream)))
+    model.add(Conv1D(filters = 276, kernel_size = 1, input_shape=(n_time, n_stream)))
+    model.add(MaxPooling1D(pool_size = 4))
+    model.add(Conv1D( filters = 248, kernel_size = 2))
+    model.add(Dropout(rate=0.3))
+    model.add(MaxPooling1D( pool_size = 5))
+    model.add(Conv1D( filters = 261, kernel_size = 2) )
+    model.add(Dropout(rate=0.03))
+    model.add(MaxPooling1D( pool_size = 5))
+    model.add(Dropout(rate=0.4))
+    model.add(Flatten())
+    model.add(Dense(6, activation = 'softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
 
-# for fold, (train_index, val_index) in enumerate(kf.split(X)):          
-#     model = Sequential()
-#     #model.add(Masking(mask_value=0.0, input_shape=(n_time, n_stream)))
-        # model.add(Conv1D( filter = hp.Int('filter1', min_value=100, max_value=300), 
-        #            kernel_size = np.Int('kernel_size1', min_value=1, max_value=5))
-        #     )
-        # model.add(
-        #     MaxPooling1D( poolsize = np.Int('pool_size1', min_value=1, max_value = 5))
-        # )
-        # model.add(
-        #     Conv1D( filter = hp.Int('filter2', min_value=100, max_value=300), 
-        #            kernel_size = np.Int('kernel_size2', min_value=1, max_value=5))
-        #     )
-        # model.add(Dropout(rate=0.3))
-        # model.add(
-        #     MaxPooling1D( poolsize = np.Int('pool_size2', min_value=1, max_value = 5))
-        # )
-        # model.add(
-        #     Conv1D( filter = hp.Int('filter3', min_value=100, max_value=300), 
-        #            kernel_size = np.Int('kernel_size3', min_value=1, max_value=5))
-        #     )
-        # model.add(Dropout(rate=0.03))
-        # model.add(
-        #     MaxPooling1D( poolsize = np.Int('pool_size3', min_value=1, max_value = 5))
-        # )
-        # model.add(Dropout(rate=0.4))
-        # model.add(Dense(6, activation = 'softmax'))
-        # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-#     model.fit(X[train_index], y[train_index], epochs=30, batch_size=16, verbose=0, callbacks=[early_stopping])
-#     val_preds = np.argmax(model.predict(X[val_index]), axis=1)
-#     val_true = np.argmax(y[val_index], axis=1)
-#     accuracy = accuracy_score(val_true, val_preds)
-#     results = model.evaluate(X[val_index], y[val_index])
-#     accuracy_list.append(accuracy)
-#     print(accuracy)
+activity_list = ["Frisbee", "Pickleball", "Baseball", "Rugby", "Lacrosse", "Tennis"] # for confusion matrix 
 
-# average_accuracy = np.mean(accuracy_list)
-# print(f'\nAverage Accuracy Across Folds: {average_accuracy}')
+for fold, (train_index, val_index) in enumerate(kf.split(X)):  
+    model = optimal_model()    
+    # evaluate
+    model.fit(X[train_index], y[train_index], epochs=50, callbacks=[early_stopping])
+    val_preds = np.argmax(model.predict(X[val_index]), axis=1)
+    val_true = np.argmax(y[val_index], axis=1)
+    accuracy = accuracy_score(val_true, val_preds)
+    results = model.evaluate(X[val_index], y[val_index])
+    accuracy_list.append(accuracy)
+    # print(accuracy)
+    # ConfusionMatrixDisplay.from_predictions(val_true, val_preds, display_labels=activity_list)
+    # plt.title("K-Fold Confusion Matrix")
+    # plt.show()
+
+print(accuracy_list)
+average_accuracy = np.mean(accuracy_list)
+print(f'\nAverage Accuracy Across Folds: {average_accuracy}')
+
+# Now do LOPO CV
+# this is bad bc I hardcoded it for the number we have
+# but didn't want to think harder than that
+accuracy_list_LOPO = []
+for i in range(2):
+    if i == 0:
+        X_part = X[0:58]
+        y_part = y[0:58]
+        data_rest = X[58:178]
+        y_rest = y[58:178]
+    else:
+        X_part = X[58+(i-1)*60:58+i*60]
+        y_part = y[58+(i-1)*60:58+i*60]
+        X_rest = np.concatenate([X[0:58+(i-1)*60], X[58+i*60:178]])
+        y_rest = np.concatenate([y[0:58+(i-1)*60], y[58+i*60:178]])
+    model = optimal_model
+    model.fit(X_rest, y_rest, epochs = 50, callbacks = [early_stopping], validation_data=(X_part, y_part))
+    val_preds = model.predict(X_part)
+    val_preds = np.argmax(val_preds, axis=1)
+    val_true = np.argmax(y_part, axis=1)
+    accuracy = accuracy_score(y_part, val_preds)
+    accuracy_list_LOPO.append(accuracy)
+    #create a confusion matrix for each participant to identify discrepancies
+    ConfusionMatrixDisplay.from_predictions(val_true, val_preds, display_labels=activity_list)
+    plt.title("LOPO Confusion Matrix")
+    plt.show()
+
+print(f'LOPO Accuracy List: {accuracy_list_LOPO}')
+average_accuracy = np.mean(accuracy_list_LOPO)
+print(f'\nLOPO Average Accuracy: {average_accuracy * 100:.2f}%')
+
