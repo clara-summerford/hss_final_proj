@@ -6,10 +6,11 @@ from pathlib import Path
 import pandas as pd
 
 # adjust root path as needed 
-root = Path('hss_final_proj/3_25_raw_data')
+BASE_DIR = Path(__file__).resolve().parent
+root = BASE_DIR / "3_25_raw_data"
 
 # combine accelerometer and gyroscope data into one IMU file
-def merge_acc_gryo():
+def merge_acc_gyro():
     for trial_path in sorted(root.iterdir()):
         if not trial_path.is_dir(): # can change this to leave out previously processed trials later
             continue
@@ -37,14 +38,13 @@ def merge_acc_gryo():
         merged.columns = ['time', 'seconds_elapsed', 'accel_x', 'accel_y', 'accel_z',
                                         'gyro_x',  'gyro_y',  'gyro_z']
         
-        # p = trial_path.stem
         output_file = str(trial_path) + "_IMU.csv"
         output_path = trial_path / output_file
 
         merged.to_csv(output_file, index=False)
         print(f"Saved {len(merged)} rows → {output_path}")
 
-# merge_acc_gryo() 
+# merge_acc_gyro() 
         
 # combine all 3 IMU streams
 def combine_IMU_streams():
@@ -76,11 +76,6 @@ def combine_IMU_streams():
             for df in dfs: # creates a nested list with 3 entries, each entry is a trimmed DF
                 mask = (df['time'] >= latest_start) & (df['time'] <= earliest_end)
                 trimmed.append(df[mask].sort_values('time').reset_index(drop=True))
-            # print("Trimmed dataframe lengths:")
-            # print(len(trimmed[0]))
-            # print(len(trimmed[1]))
-            # print(len(trimmed[2]))
-
 
             # store timestamp of the shortest of the trimmed dataframes
             ref_df = min(trimmed, key=len)
@@ -109,13 +104,10 @@ def combine_IMU_streams():
 
                 # combine all IMU channels with corrected timeframes
                 aligned.append(snapped)
-                # print(f"Iteration {id} snapped size: {snapped.size}")
-                # print(f"Snapped columns: {snapped.columns}")
 
             # equalize lengths of dataframes after dropping mismatched samples
             min_len = min(len(df) for df in aligned)
             aligned = [df.iloc[:min_len].reset_index(drop=True) for df in aligned]
-            # print(f"aligned 0 columns: {aligned[0].columns}")
             
             # rename columns before merging
             for k in range(len(aligned)):
@@ -149,9 +141,7 @@ def combine_IMU_streams():
 def extract_windows():
 
     user = int(input("Enter user number: \nVictoria = 1 \nClara = 2 \nJessi = 3\n").strip())
-    sport = int(input("Enter sport: \nFrisbee = 1 \nPickle = 2 \nThrowing = 3 \nRugby = 4 \nLacrosse = 5 \nTennis = 6\n").strip())
-    # user = 1
-    # sport = 3
+    sport = int(input("Enter sport: \nFrisbee = 1 \nPickleball = 2 \nBaseball = 3 \nRugby = 4 \nLacrosse = 5 \nTennis = 6\n").strip())
 
     sport_file = f"{user}_{sport}_combined_IMU.csv"
     filepath = root / 'combined_IMU' / sport_file
@@ -189,8 +179,8 @@ def extract_windows():
         seg_name = f"{user}_{sport}_{i+1:02d}.csv"
 
         # save activity segments as individual files, easier to parse through later
-        segment.to_csv(seg_path/seg_name, index=False)
-        print(f"Saved {len(segment)} rows → {seg_path/seg_name}")
+        # segment.to_csv(seg_path/seg_name, index=False)
+        # print(f"Saved {len(segment)} rows → {seg_path/seg_name}")
 
 extract_windows()
 

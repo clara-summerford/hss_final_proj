@@ -1,5 +1,5 @@
 # processing all activities and feature extraction
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -123,7 +123,7 @@ X_vec = scaler.fit_transform(X_vec)
 X_vec = SelectPercentile(f_classif, percentile=50).fit_transform(X_vec, y_vec)
 
 # initialize a df to save all results in and export to spreadsheet
-all_scores = pd.DataFrame(columns=['Model, Score LOPO 1', 'Score LOPO 2', 'Score LOPO 3', 'Average LOPO Score', 'K-Fold Score 1', 'K-Fold Score 2', 'K-Fold Score 3', 'K-Fold Score 4', 'Average K-Fold Score', 'Average K-Fold Score Participant 1', 'Average K-Fold Score Participant 2', 'Average K-Fold Score Participant 3' ])
+all_scores = pd.DataFrame(columns=['Model', 'Score LOPO 1', 'Score LOPO 2', 'Score LOPO 3', 'Average LOPO Score', 'K-Fold Score 1', 'K-Fold Score 2', 'K-Fold Score 3', 'K-Fold Score 4', 'Average K-Fold Score', 'Average K-Fold Score Participant 1', 'Average K-Fold Score Participant 2', 'Average K-Fold Score Participant 3' ])
 
 # ---  SVC classifier ---
 clf = svm.SVC()
@@ -157,10 +157,10 @@ for i, (train_index, test_index) in enumerate(logo.split(X_vec, y_vec, groups=pa
     all_scores.loc[0, f'Score LOPO {i+1}'] = score
 
     # create a confusion matrix for each participant to identify discrepancies
-    # y_pred = clf.predict(X_test)
+    y_pred = clf.predict(X_test)
     # ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
     # plt.title("LOPO Confusion Matrix")
-    # plt.show()
+    # plt.show(block=False)
     
 print(f'Average LOPO score: {np.mean(LOPO_score)}')
 all_scores.loc[0, 'Average LOPO Score'] = np.mean(LOPO_score)
@@ -185,7 +185,7 @@ for i, (train_index, test_index) in enumerate(kf.split(X_vec)):
     all_scores.loc[0, f'K-Fold Score {i+1}'] = score
     # ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
     # plt.title("K-fold Confusion Matrix")
-    # plt.show()
+    # plt.show(block=False)
 
 print(f'Average k-fold score: {np.mean(kf_score)}')
 all_scores.loc[0, f'Average K-Fold Score'] = np.mean(kf_score)
@@ -234,6 +234,11 @@ for i, (train_index, test_index) in enumerate(logo.split(X_vec, y_vec, groups=pa
     print(f'Score for individual LOPO iteration: {score}')
     all_scores.loc[1, f'Score LOPO {i+1}'] = score
 
+    y_pred = clf.predict(X_test)
+    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
+    plt.title("LOPO Confusion Matrix")
+    plt.show(block=False)
+
 print(f'Average LOPO score: {np.mean(LOPO_score)}')
 all_scores.loc[1, 'Average LOPO Score'] = np.mean(LOPO_score)
 
@@ -253,6 +258,10 @@ for i, (train_index, test_index) in enumerate(kf.split(X_vec)):
     print(f'Iteration k-fold score: {score}')
     y_pred = clf.predict(X_test)
     all_scores.loc[1, f'K-Fold Score {i+1}'] = score
+
+    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, display_labels=activity_list)
+    plt.title("K-fold Confusion Matrix")
+    plt.show(block=False)
 
 print(f'Average k-fold score: {np.mean(kf_score)}')
 all_scores.loc[1, f'Average K-Fold Score'] = np.mean(kf_score)
@@ -277,6 +286,7 @@ for i, participant in enumerate(np.unique(participants)):
     print(f'Average k-fold score for participant {participant}: {np.mean(kf_score)}')
     all_scores.loc[1, f'Average K-Fold Score Participant {i+1}'] = np.mean(kf_score)
 
+# plt.show()
 # export score data frame to excel/csv, important for when we eventually want to compare many different models
 all_scores.to_csv("Model Scores.csv", index=False)
 # all_scores.to_excel("ModelScore.xlsx", index=False)
